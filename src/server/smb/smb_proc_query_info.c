@@ -197,10 +197,11 @@ chimera_smb_query_stream_info_complete(
         records_len,
         count,
         NULL);
-
+    printf("SOUBHIK LOOK HERE: request->query_info.output_length = %u\n", request->query_info.output_length);
     if (request->query_info.max_response_size < SMB2_FILE_STREAM_INFO_FIXED_SIZE) {
         status = SMB2_STATUS_INFO_LENGTH_MISMATCH;
     } else if (request->query_info.max_response_size < request->query_info.output_length) {
+        printf("SOUBHIK LOOK HERE: request->query_info.max_response_size = %u\n", request->query_info.max_response_size);
         status                            = SMB2_STATUS_BUFFER_OVERFLOW;
         request->query_info.output_length = request->query_info.max_response_size;
     }

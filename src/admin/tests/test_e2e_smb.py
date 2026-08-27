@@ -123,3 +123,93 @@ class TestSmbPipeline:
                     client.delete_user(USER)
                 except ChimeraAdminError:
                     pass
+
+
+class TestSmbDefaultDataFork:
+    """Regression test for issue #1476.
+
+    "file::$DATA" (empty stream name, $DATA type) names a file's DEFAULT data
+    fork per MS-FSCC 2.1.5.1.1 -- it is not an alternate data stream, and must
+    always be openable even with named streams (ADS) disabled, which is the
+    session daemon's default ("named_streams" is unset).  A genuine alternate
+    stream ("file:altstream") must still be rejected in that configuration.
+    """
+
+    USER = "testuser1476"
+    PASSWORD = "systest1476"
+    MOUNT = "smbmount1476"
+    SHARE = "smb1476"
+    SHARE_PATH = "/smbmount1476"
+
+    def test_default_data_fork_and_named_stream(self, client, chimera_server, tmp_path):
+        host, _ = chimera_server
+
+        created = {"user": False, "mount": False, "share": False}
+        try:
+            client.create_user(self.USER, uid=1001, gid=1001, smbpasswd=self.PASSWORD)
+            created["user"] = True
+
+            client.create_mount(self.MOUNT, module="memfs", path="fs0")
+            created["mount"] = True
+
+            client.create_share(self.SHARE, self.SHARE_PATH)
+            created["share"] = True
+
+            src = tmp_path / "src.txt"
+            src.write_text("issue-1476")
+
+            result = _smbclient(
+                host, self.SHARE, self.USER, self.PASSWORD, f"put {src} readme.txt"
+            )
+            assert result.returncode == 0, (
+                f"put failed (rc={result.returncode})\nstdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+
+            # The default data fork, spelled out explicitly, must open like the
+            # plain file (issue #1476) even though named streams are disabled.
+            dst = tmp_path / "out.txt"
+            result = _smbclient(
+                host, self.SHARE, self.USER, self.PASSWORD,
+                f"get readme.txt::$DATA {dst}"
+            )
+            assert result.returncode == 0, (
+                "get of the default data fork (readme.txt::$DATA) failed "
+                f"(rc={result.returncode})\nstdout:\n{result.stdout}\n"
+                f"stderr:\n{result.stderr}"
+            )
+            assert dst.read_text() == "issue-1476"
+
+            # A genuine alternate data stream must still be rejected while
+            # named streams remain disabled -- this behavior must not change.
+            result = _smbclient(
+                host, self.SHARE, self.USER, self.PASSWORD,
+                "get readme.txt:altstream out2.txt"
+            )
+            assert result.returncode != 0
+            assert "OBJECT_NAME_INVALID" in result.stdout + result.stderr
+
+            client.delete_share(self.SHARE)
+            created["share"] = False
+
+            client.delete_mount(self.MOUNT)
+            created["mount"] = False
+
+            client.delete_user(self.USER)
+            created["user"] = False
+        finally:
+            if created["share"]:
+                try:
+                    client.delete_share(self.SHARE)
+                except ChimeraAdminError:
+                    pass
+            if created["mount"]:
+                try:
+                    client.delete_mount(self.MOUNT)
+                except ChimeraAdminError:
+                    pass
+            if created["user"]:
+                try:
+                    client.delete_user(self.USER)
+                except ChimeraAdminError:
+                    pass

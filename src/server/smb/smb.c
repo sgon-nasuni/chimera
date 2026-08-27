@@ -49,6 +49,7 @@ chimera_smb_is_error_status(unsigned int status)
     return status != SMB2_STATUS_SUCCESS &&
            status != SMB2_STATUS_MORE_PROCESSING_REQUIRED &&
            status != SMB2_STATUS_NOTIFY_ENUM_DIR;
+        //    status != SMB2_STATUS_BUFFER_OVERFLOW;
 } /* chimera_smb_is_error_status */
 
 /*
